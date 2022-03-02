@@ -28,7 +28,6 @@ app.get('/', (req, res) => {
 // })
 //Create a Person Schema
 const PersonSchema = new mongoose.Schema({
-  _id: {type: String, default: mongoose.Types.ObjectId().toString()},
   username: {type: String, required: true},
   count: {type: Number, default: 0},
   log: [{
@@ -50,8 +49,8 @@ const createUser = async (user) => {
 //update the users log given descrip. dura. & date [OPTIONAL]
 const updateLogs = async (id,descrip, dura, dat, done) => {
   let fDat;
-  if (!descrip) descrip = 'Exercise'
-  if (!dura) dura = 45
+  if (!descrip) descrip = ''
+  if (!dura) dura = 0
   if(!dat) {
     dat = new Date
     fDat = dat.toDateString()
@@ -94,7 +93,7 @@ const findUserLogs = async (id, from=null, to=null, limit=null) => {
         }
       })
       return {
-        '_id': user._id,
+        '_id': user.id,
         'username': user.username,
         'count': user.count,
         'log': logs
@@ -112,11 +111,30 @@ const findUserLogs = async (id, from=null, to=null, limit=null) => {
         logs = logs.slice(0,limit)
       }
       return {
-        '_id': user._id,
+        '_id': user.id,
         'username': user.username,
         'count': user.count,
         'log': logs
       }
+    }
+  }
+  else if (!from && !to && limit){
+    let logs = user.log.map(log => {
+      return {
+        'description': log.description,
+        'duration': log.duration,
+        'date': new Date(log.date).toDateString()
+      }
+    })
+    if (limit && limit > 0 && limit < logs.length){
+      console.log('limit but no from')
+      logs = logs.slice(0,limit)
+    }
+    return {
+      '_id': user.id,
+      'username': user.username,
+      'count': user.count,
+      'log': logs
     }
   }
   else {
@@ -128,8 +146,8 @@ const findUserLogs = async (id, from=null, to=null, limit=null) => {
       }
     })
     //console.log(logs)
-    return {
-      '_id': user._id,
+    return { 
+      '_id': user.id,
       'username': user.username,
       'count': user.count,
       'log': logs
@@ -146,8 +164,8 @@ app.post('/api/users', async (req, res, done)=> {
   try{
     let newUser = await createUser(user)
     res.json({
-      '_id': newUser._id,
       'username': newUser.username,
+      '_id': newUser._id
     })
   } catch(err)
   {done(err)}
@@ -164,17 +182,24 @@ app.get('/api/users', (req, res) => {
 //posting exercises into logs with /api/:_id/exercises
 app.post('/api/users/:_id/exercises', async (req, res, done)=>{
   try{
-    let id = req.body._id, descrip = req.body.description, dura = req.body.duration, dat = req.body.date
-    console.log(id)
+    let id = req.body[':_id'], descrip = req.body.description, dura = req.body.duration, dat = req.body.date
+    //console.log(req.body)
+    console.log(req.body[':_id'])
+    console.log(`POST /api/users/${id}/exercises from ${req.ip}`)
+    if (!id) {
+      id = req.params._id
+    }
+    console.log(`Got id from url: ${id}`)
+    console.log(`User ID: ${id}`)
     await updateLogs(id, descrip, dura, dat)
     let user = await Person.findById(id)
     //console.log(user.logs)
     let output = {
-      '_id': user._id,
       'username': user.username,
       'description': user.log[user.log.length-1].description,
       'duration': user.log[user.log.length-1].duration,
-      'date': new Date(user.log[user.log.length-1].date).toDateString()
+      'date': new Date(user.log[user.log.length-1].date).toDateString(),
+      '_id': user._id
     }
     res.json(output)
     
@@ -199,7 +224,8 @@ app.get('/api/test?', (req, res)=>{
 app.get('/api/users/:id/logs?', async (req, res, done) =>{
   let from = req.query.from, to = req.query.to, limit = req.query.limit
   let id = req.params.id
-  console.log(`GET /api/users/${id}/logs? from ${req.ip}`)
+  console.log(`from: ${from} & to: ${to} & limit: ${limit}`)
+  console.log(`GET /api/users/${id}/logs from ${req.ip}`)
   let results = await findUserLogs(id, from, to, limit)
   res.json(results)
   })
